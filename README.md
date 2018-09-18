@@ -54,6 +54,9 @@ docker-compose -f setup.yml up
 Please take note after the setup completes it will output the password
 that is used for the `elastic` login.
 
+    IMPORTANT: copy the generated password in docker-compose.yml line 143 inside prometheus-es-adapter config
+    Copy the data1.csv, data2.csv, data3.csv and data4.csv files inside /config/logstash/
+
 Now we can launch the stack with `docker-compose up -d` to create a demonstration Elastic Stack with
 Elasticsearch, Kibana, Logstash, Auditbeat, Metricbeat, Filebeat, Packetbeat,
 and Heartbeat.
