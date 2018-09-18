@@ -21,3 +21,8 @@ config/heartbeat/heartbeat.keystore
 config/metricbeat/metricbeat.keystore
 config/packetbeat/packetbeat.keystore
 config/apm-server/apm-server.keystore
+
+config/logstash/data1.csv
+config/logstash/data2.csv
+config/logstash/data3.csv
+config/logstash/data4.csv

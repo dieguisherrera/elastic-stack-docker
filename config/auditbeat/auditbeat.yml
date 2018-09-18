@@ -15,7 +15,7 @@ auditbeat.modules:
 
 output.elasticsearch:
   hosts: ['elasticsearch:9200']
-  protocol: "https"
+  protocol: "http"
   username: elastic
   # Read PW from auditbeat.keystore
   password: "${ELASTIC_PASSWORD}"

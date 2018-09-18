@@ -11,7 +11,7 @@ do
 done
 ls -l $cacert
 
-es_url=https://elasticsearch:9200
+es_url=http://elasticsearch:9200
 # Wait for Elasticsearch to start up before doing anything.
 while [[ "$(curl -u "elastic:${ELASTIC_PASSWORD}" --cacert $cacert -s -o /dev/null -w '%{http_code}' $es_url)" != "200" ]]; do 
     sleep 5 

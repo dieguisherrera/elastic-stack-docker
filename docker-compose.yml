@@ -31,13 +31,15 @@ services:
         target: /usr/share/elasticsearch/config/certs/elasticsearch/elasticsearch.key
       - source: elasticsearch.crt
         target: /usr/share/elasticsearch/config/certs/elasticsearch/elasticsearch.crt
-    ports: ['9200:9200']
+    ports: 
+      - "9200:9200"
+      - "9300:9300"
     networks: ['stack']
     volumes:
       - 'es_data:/usr/share/elasticsearch/data'
       - './scripts/setup-users.sh:/usr/local/bin/setup-users.sh:ro'
     healthcheck:
-      test: curl --cacert /usr/share/elasticsearch/config/certs/ca/ca.crt -s https://localhost:9200 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
+      test: curl --cacert /usr/share/elasticsearch/config/certs/ca/ca.crt -s http://localhost:9200 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
       interval: 30s
       timeout: 10s
       retries: 5
@@ -60,10 +62,111 @@ services:
     networks: ['stack']
     depends_on: ['elasticsearch']
     healthcheck:
-      test: curl --cacert /usr/share/elasticsearch/config/certs/ca/ca.crt -s https://localhost:5601 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
+      test: curl --cacert /usr/share/elasticsearch/config/certs/ca/ca.crt -s http://localhost:5601 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
       interval: 30s
       timeout: 10s
       retries: 5
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports: ['3000:3000']
+    networks: ['stack']
+    depends_on: ['elasticsearch']
+    volumes:
+      - grafana_data:/var/lib/grafana
+    env_file:
+      - 'env.grafana'
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/:/etc/prometheus/
+      - prometheus_data:/prometheus
+      - ./config/ssl/ca/ca.crt:/usr/share/certs/ca/ca.crt
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+    depends_on:
+      - cadvisor
+    links:
+      - cadvisor:cadvisor
+      - alertmanager:alertmanager
+    networks: ['stack']
+    restart: always
+
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    ports:
+      - 9093:9093
+    volumes:
+      - ./alertmanager/:/etc/alertmanager/
+    networks: ['stack']
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    
+  cadvisor:
+    image: google/cadvisor
+    container_name: cadvisor
+    command: -port=8484
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - 8484:8484
+    networks: ['stack']
+    restart: always
+
+  prometheus-es-adapter:
+    build:
+      context: ./prometheus-es-adapter
+    restart: always
+    networks: ['stack']
+    depends_on:
+      - elasticsearch
+      - prometheus
+    ports:
+      - '8080:8080'
+    environment:
+      - ES_URL=http://elasticsearch:9200
+      - ES_USER=elastic
+      - ES_PASSWORD=MQMHUizRRXmJI12grG1e6g==
+
+  #prometheus_elasticsearch_adapter:
+  #  build: ./prometheus-elasticsearch-adapter
+  #  restart: always
+  #  ports:
+  #    - "9201:9201"
+  #  networks: ['stack']
+  #  volumes:
+  #    - ./prometheus-elasticsearch-adapter/config.yaml:/go/src/app/config.yaml
+  #  depends_on:
+  #    - elasticsearch
+
+
+  elasticsearch_exporter:
+    image: justwatch/elasticsearch_exporter:1.0.2
+    command:
+      - '-es.uri=http://elastic:MQMHUizRRXmJI12grG1e6g==@elasticsearch:9200'
+    restart: always
+    networks: ['stack']
+    depends_on:
+      - elasticsearch
+      - prometheus
+    volumes:
+      - './config/ssl/ca/ca.crt:/usr/share/certs/ca/ca.crt'
+    ports:
+      - "9108:9108"
 
   logstash:
     image: docker.elastic.co/logstash/logstash:${TAG}
@@ -71,6 +174,14 @@ services:
     secrets:
       - source: logstash.conf
         target: /usr/share/logstash/pipeline/logstash.conf
+      - source: data1.csv
+        target: /usr/share/logstash/config/data1.csv
+      - source: data2.csv
+        target: /usr/share/logstash/config/data2.csv
+      - source: data3.csv
+        target: /usr/share/logstash/config/data3.csv
+      - source: data4.csv
+        target: /usr/share/logstash/config/data4.csv
       - source: logstash.yml
         target: /usr/share/logstash/config/logstash.yml
       - source: logstash.keystore
@@ -199,7 +310,7 @@ services:
     # on "localhost", which is the Docker host machine in this context.
     command: -e -E 'output.elasticsearch.hosts=["localhost:9200"]'
     depends_on: ['elasticsearch']
-    command: --strict.perms=false -e -E output.elasticsearch.hosts="https://localhost:9200" # -e flag to log to stderr and disable syslog/file output
+    command: --strict.perms=false -e -E output.elasticsearch.hosts="http://localhost:9200" # -e flag to log to stderr and disable syslog/file output
     secrets:
       - source: packetbeat.yml
         target: /usr/share/packetbeat/packetbeat.yml
@@ -233,7 +344,7 @@ services:
       - './scripts/setup-beat.sh:/usr/local/bin/setup-beat.sh:ro'
     depends_on: ['elasticsearch', 'kibana']
     healthcheck:
-      test: curl --cacert /usr/share/elasticsearch/config/certs/ca/ca.crt -s https://localhost:8200/healthcheck >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
+      test: curl --cacert /usr/share/elasticsearch/config/certs/ca/ca.crt -s http://localhost:8200/healthcheck >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
       interval: 30s
       timeout: 10s
       retries: 5
@@ -242,6 +353,9 @@ networks: {stack: {}}
 # use docker volume to persist ES data outside of a container.
 volumes:
   es_data:
+  prometheus_data: {}
+  grafana_data: {}
+
 
 secrets:
   ca.crt:
@@ -252,6 +366,14 @@ secrets:
     file: ./config/logstash/logstash.keystore
   logstash.conf:
     file: ./config/logstash/pipeline/logstash.conf
+  data1.csv:
+    file: ./config/logstash/data1.csv
+  data2.csv:
+    file: ./config/logstash/data2.csv
+  data3.csv:
+    file: ./config/logstash/data3.csv
+  data4.csv:
+    file: ./config/logstash/data4.csv
   elasticsearch.yml:
     file: ./config/elasticsearch/elasticsearch.yml
   elasticsearch.keystore:

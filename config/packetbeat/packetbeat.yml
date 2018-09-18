@@ -39,7 +39,7 @@ processors:
 
 output.elasticsearch:
   hosts: ['elasticsearch:9200']
-  protocol: "https"
+  protocol: "http"
   username: elastic
   # Read PW from packetbeat.keystore
   password: "${ELASTIC_PASSWORD}"

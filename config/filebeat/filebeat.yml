@@ -11,7 +11,7 @@ processors:
 
 output.elasticsearch:
   hosts: ['elasticsearch:9200']
-  protocol: "https"
+  protocol: "http"
   username: elastic
   # Read PW from filebeat.keystore
   password: "${ELASTIC_PASSWORD}"
